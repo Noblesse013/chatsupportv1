@@ -1,60 +1,41 @@
-import OpenAI from "openai";
-import { NextResponse } from "next/server";
+import {NextResponse} from 'next/server' // Import NextResponse from Next.js for handling responses
+import OpenAI from 'openai' // Import OpenAI library for interacting with the OpenAI API
 
-// Define the system prompt for the AI model
-const systemPrompt = `You are a customer support bot for Headstarter AI, a platform for AI-powered interviews for software engineering jobs. You are professional, knowledgeable, and dedicated to assisting users. Answer questions about the platform, its features, and provide guidance based on the following examples:
+// System prompt for the AI, providing guidelines on how to respond to users
+const systemPrompt = "You are an AI assistant who helps users with their queries"// Use your own system prompt here
 
-1. Headstarter AI is a platform that uses artificial intelligence to conduct technical interviews for software engineering roles, providing evaluations and feedback.
-2. To get started, sign up on our website, complete your profile, and schedule an interview. Our AI will guide you through the process and evaluate your skills.
-3. Our platform offers a variety of features, including coding challenges, mock interviews, and personalized feedback to help you improve your technical skills.
-4. If you encounter any technical issues, contact our support team via email or live chat. We’re here to assist you and ensure a smooth experience.
-5. For more information about our platform, visit our website or check out our FAQ section. We’re happy to help you succeed in your job search!
-6. Always be professional and helpful in your responses to users.
-
-Your goal is to provide accurate and informative responses to user inquiries. Be polite, patient, and professional in your interactions.`;        
-
+// POST function to handle incoming requests
 export async function POST(req) {
-   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); // Initialize OpenAI client with API key
+  const openai = new OpenAI() // Create a new instance of the OpenAI client
+  const data = await req.json() // Parse the JSON body of the incoming request
 
-   const data = await req.json();
+  // Create a chat completion request to the OpenAI API
+  const completion = await openai.chat.completions.create({
+    messages: [{role: 'system', content: systemPrompt}, ...data], // Include the system prompt and user messages
+    model: 'gpt-4o', // Specify the model to use
+    stream: true, // Enable streaming responses
+  })
 
-   // Ensure data is in the correct format
-   const userMessage = data.message || '';
+  // Create a ReadableStream to handle the streaming response
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder() // Create a TextEncoder to convert strings to Uint8Array
+      try {
+        // Iterate over the streamed chunks of the response
+        for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content // Extract the content from the chunk
+          if (content) {
+            const text = encoder.encode(content) // Encode the content to Uint8Array
+            controller.enqueue(text) // Enqueue the encoded text to the stream
+          }
+        }
+      } catch (err) {
+        controller.error(err) // Handle any errors that occur during streaming
+      } finally {
+        controller.close() // Close the stream when done
+      }
+    },
+  })
 
-   // Create a prompt with the system instructions and user input
-   const messages = [
-     { role: 'system', content: systemPrompt },
-     { role: 'user', content: userMessage },
-   ];
-
-   try {
-     const completion = await openai.completions.create({
-       model: 'gpt-4',
-       messages: messages,
-       stream: true,
-     });
-
-     const stream = new ReadableStream({  
-       async start(controller) {
-         const encoder = new TextEncoder();
-         try {
-           for await (const chunk of completion) {
-             const content = chunk.choices[0]?.delta?.content;
-             if (content) {
-               const text = encoder.encode(content);
-               controller.enqueue(text);
-             }
-           } 
-         } catch (error) {
-           controller.error(error);
-         } finally {
-           controller.close();
-         }
-       }, 
-     });
-
-     return new Response(stream);
-   } catch (error) {
-     return new Response('Failed to fetch response from AI model', { status: 500 });
-   }
+  return new NextResponse(stream) // Return the stream as the response
 }

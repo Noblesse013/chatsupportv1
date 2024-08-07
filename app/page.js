@@ -1,13 +1,13 @@
-'use client'
-import Image from "next/image";
-import { useState } from "react";
-import { Box, Button, TextField, Stack } from "@mui/material";
+'use client';
+import Image from 'next/image';
+import { useState } from 'react';
+import { Box, Button, TextField, Stack } from '@mui/material';
 
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Elo I\'m an AI assistant from Headstarter. How can I help you today?',
+      content: 'Hello, I\'m an AI assistant from Headstarter. How can I help you today?',
     }
   ]);
 
@@ -17,33 +17,50 @@ export default function Home() {
     setMessages((messages) => [
       ...messages,
       { role: 'user', content: message },
-      { role: 'assistant', content: 'I am potato' },
     ]);
     setMessage('');
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ role: 'user', content: message }),
-    });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    let result = '';
-    reader.read().then(function processText({ done, value }) {
-      if (done) {
-        return result;
-      }
-      const text = decoder.decode(value || new Uint8Array(), { stream: true });
-      setMessages((messages) => {
-        let lastMessage = messages[messages.length - 1];
-        let otherMessages = messages.slice(0, messages.length - 1);
-        return [...otherMessages, { ...lastMessage, content: lastMessage.content + text }];
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: message }] }), // Adjust the data structure as needed
       });
-      return reader.read().then(processText);
-    });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let result = '';
+      reader.read().then(function processText({ done, value }) {
+        if (done) {
+          setMessages((messages) => [
+            ...messages,
+            { role: 'assistant', content: result },
+          ]);
+          return;
+        }
+        const text = decoder.decode(value || new Uint8Array(), { stream: true });
+        result += text;
+        setMessages((messages) => {
+          const lastMessage = messages[messages.length - 1];
+          const otherMessages = messages.slice(0, -1);
+          return [...otherMessages, { ...lastMessage, content: lastMessage.content + text }];
+        });
+        return reader.read().then(processText);
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages((messages) => [
+        ...messages,
+        { role: 'assistant', content: 'Sorry, there was an error processing your request.' },
+      ]);
+    }
   };
 
   return (

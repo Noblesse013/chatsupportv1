@@ -1,5 +1,4 @@
-'use client';
-
+'use client'
 import { useState, useEffect, useRef } from 'react';
 import { Box, Button, Stack, TextField, Dialog, DialogActions, DialogContent, DialogTitle, Rating, Typography, Grid, AppBar, Toolbar, IconButton, Menu, MenuItem, Container, CssBaseline } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
